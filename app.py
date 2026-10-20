@@ -6,7 +6,7 @@ from screener import calculate_squeeze_signals, get_option_metrics
 st.set_page_config(page_title="Vol Squeeze Screener", layout="wide")
 st.title("🎯 Volatility Squeeze Scanner")
 
-DEFAULT_TICKERS = "SPY, QQQ, IWM, AAPL, MSFT, NVDA, AMZN, TSLA, META, AMD, NFLX, COIN"
+DEFAULT_TICKERS = "SPY, QQQ, IWM, AAPL, MSFT, NVDA, AMZN, TSLA, META, AMD, NFLX, JNJ, PFE, NVDA, RVMD, DYN, ARGX, VSTM, BMY, SOLS, SNY, URGN, KRMN, KNSA, JAZZ, BLLN, AZN, GRAL, IONQ, GILD, NTRA, VRTX, NOW, MEDP, HD, GH, MRVL, TSM, MP, NKE, IBM, GSK, CRDO, COIN"
 user_input = st.text_area("Watchlist (comma separated)", value=DEFAULT_TICKERS)
 tickers = [t.strip().upper() for t in user_input.split(",") if t.strip()]
 

@@ -64,60 +64,71 @@ def calculate_squeeze_signals(df: pd.DataFrame) -> dict:
         "adx": round(latest_adx, 1),
         "qualified": score >= 3
     }
-from datetime import datetime
+from datetime import datetime, date
 
-def get_option_metrics(ticker_str: str) -> dict:
+def get_option_metrics(ticker_str: str, current_price: float = None) -> dict:
     tk = yf.Ticker(ticker_str)
     try:
         expirations = tk.options
         if not expirations:
             return {"atm_iv": "N/A", "expiry": "None", "dte": "N/A"}
-        
-        today = datetime.now().date()
+
+        today = date.today()
         valid_expiries = []
 
-        # Calculate DTE for each expiration date
         for exp in expirations:
             try:
-                exp_date = datetime.strptime(exp, "%Y-%m-%d").date()
+                exp_date = datetime.strptime(str(exp).strip(), "%Y-%m-%d").date()
                 dte = (exp_date - today).days
-                valid_expiries.append((exp, dte))
-            except ValueError:
+                if dte > 0:  # Ignore expired or 0 DTE
+                    valid_expiries.append((exp, dte))
+            except Exception:
                 continue
 
         if not valid_expiries:
             return {"atm_iv": "N/A", "expiry": "None", "dte": "N/A"}
 
-        # Target window: 30 to 60 DTE (ideal for breakout expansion)
+        # Target 30 to 60 DTE (centered around 45 DTE)
         window_expiries = [item for item in valid_expiries if 30 <= item[1] <= 60]
 
         if window_expiries:
-            # Pick expiration closest to 45 DTE
             target_exp, dte = min(window_expiries, key=lambda x: abs(x[1] - 45))
         else:
-            # Fallback: pick the closest date that is at least 25 days out
-            future_expiries = [item for item in valid_expiries if item[1] >= 25]
+            # Fallback: closest expiration at least 20 days out, or the longest available
+            future_expiries = [item for item in valid_expiries if item[1] >= 20]
             if future_expiries:
                 target_exp, dte = min(future_expiries, key=lambda x: x[1])
             else:
-                # If no longer-dated options exist, pick the longest available
                 target_exp, dte = max(valid_expiries, key=lambda x: x[1])
 
+        # Fetch option chain for selected target expiration
         chain = tk.option_chain(target_exp)
         calls = chain.calls
-        
-        current_price = tk.fast_info.get("lastPrice", None)
-        if current_price is None or calls.empty:
-            return {"atm_iv": "N/A", "expiry": target_exp, "dte": dte}
 
-        # Select ATM Call
-        atm_call = calls.iloc[(calls["strike"] - current_price).abs().argsort()[:1]]
-        atm_iv = round(float(atm_call["impliedVolatility"].iloc[0]) * 100, 1) if not atm_call.empty else "N/A"
-        
+        if calls is None or calls.empty:
+            return {"atm_iv": "N/A", "expiry": str(target_exp), "dte": dte}
+
+        # Fallback price if not passed from scanner
+        if current_price is None or pd.isna(current_price):
+            try:
+                current_price = float(tk.fast_info["lastPrice"])
+            except Exception:
+                current_price = float(calls["strike"].median())
+
+        # Find closest strike to current spot price
+        idx = (calls["strike"] - current_price).abs().idxmin()
+        atm_row = calls.loc[idx]
+        raw_iv = atm_row.get("impliedVolatility", np.nan)
+
+        if pd.notnull(raw_iv) and raw_iv > 0:
+            atm_iv = f"{round(float(raw_iv) * 100, 1)}%"
+        else:
+            atm_iv = "N/A"
+
         return {
-            "atm_iv": f"{atm_iv}%",
-            "expiry": target_exp,
-            "dte": dte
+            "atm_iv": atm_iv,
+            "expiry": str(target_exp),
+            "dte": int(dte)
         }
-    except Exception:
+    except Exception as e:
         return {"atm_iv": "N/A", "expiry": "None", "dte": "N/A"}

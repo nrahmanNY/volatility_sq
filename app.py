@@ -22,7 +22,7 @@ if st.button("🚀 Run Squeeze Scan", use_container_width=True):
                 sig = calculate_squeeze_signals(df)
                 if sig and sig["qualified"]:
                     opt = get_option_metrics(sym)
-                    results.append({
+                results.append({
                         "Symbol": sym,
                         "Price": sig["price"],
                         "Score": sig["score"],
@@ -31,7 +31,8 @@ if st.button("🚀 Run Squeeze Scan", use_container_width=True):
                         "ATR Ratio": sig["atr_ratio"],
                         "ADX": sig["adx"],
                         "ATM IV": opt["atm_iv"],
-                        "Target Exp": opt["expiry"]
+                        "Target Exp": opt["expiry"],
+                        "DTE": opt.get("dte", "N/A")    
                     })
             except Exception:
                 continue

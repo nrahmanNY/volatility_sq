@@ -64,28 +64,60 @@ def calculate_squeeze_signals(df: pd.DataFrame) -> dict:
         "adx": round(latest_adx, 1),
         "qualified": score >= 3
     }
+from datetime import datetime
 
 def get_option_metrics(ticker_str: str) -> dict:
     tk = yf.Ticker(ticker_str)
     try:
         expirations = tk.options
         if not expirations:
-            return {"atm_iv": "N/A", "expiry": "None"}
+            return {"atm_iv": "N/A", "expiry": "None", "dte": "N/A"}
         
-        target_exp = expirations[min(len(expirations)-1, 1)]
+        today = datetime.now().date()
+        valid_expiries = []
+
+        # Calculate DTE for each expiration date
+        for exp in expirations:
+            try:
+                exp_date = datetime.strptime(exp, "%Y-%m-%d").date()
+                dte = (exp_date - today).days
+                valid_expiries.append((exp, dte))
+            except ValueError:
+                continue
+
+        if not valid_expiries:
+            return {"atm_iv": "N/A", "expiry": "None", "dte": "N/A"}
+
+        # Target window: 30 to 60 DTE (ideal for breakout expansion)
+        window_expiries = [item for item in valid_expiries if 30 <= item[1] <= 60]
+
+        if window_expiries:
+            # Pick expiration closest to 45 DTE
+            target_exp, dte = min(window_expiries, key=lambda x: abs(x[1] - 45))
+        else:
+            # Fallback: pick the closest date that is at least 25 days out
+            future_expiries = [item for item in valid_expiries if item[1] >= 25]
+            if future_expiries:
+                target_exp, dte = min(future_expiries, key=lambda x: x[1])
+            else:
+                # If no longer-dated options exist, pick the longest available
+                target_exp, dte = max(valid_expiries, key=lambda x: x[1])
+
         chain = tk.option_chain(target_exp)
         calls = chain.calls
         
         current_price = tk.fast_info.get("lastPrice", None)
         if current_price is None or calls.empty:
-            return {"atm_iv": "N/A", "expiry": target_exp}
+            return {"atm_iv": "N/A", "expiry": target_exp, "dte": dte}
 
+        # Select ATM Call
         atm_call = calls.iloc[(calls["strike"] - current_price).abs().argsort()[:1]]
         atm_iv = round(float(atm_call["impliedVolatility"].iloc[0]) * 100, 1) if not atm_call.empty else "N/A"
         
         return {
             "atm_iv": f"{atm_iv}%",
-            "expiry": target_exp
+            "expiry": target_exp,
+            "dte": dte
         }
     except Exception:
-        return {"atm_iv": "N/A", "expiry": "None"}
+        return {"atm_iv": "N/A", "expiry": "None", "dte": "N/A"}

@@ -62,7 +62,7 @@ def calculate_squeeze_signals(df: pd.DataFrame) -> dict:
         "bbw_pct": round(latest_bbw_pct * 100, 1),
         "atr_ratio": round(atr_ratio, 2),
         "adx": round(latest_adx, 1),
-        "qualified": score >= 3
+        "qualified": score >= 2
     }
 from datetime import datetime, date
 

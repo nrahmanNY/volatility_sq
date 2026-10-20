@@ -43,13 +43,11 @@ def calculate_squeeze_signals(df: pd.DataFrame) -> dict:
     # Rolling 6-month (126 days) BBW Percentile Rank
     bbw_pctile = bbw.rolling(126).apply(lambda s: (s.iloc[-1] >= s).mean(), raw=False)
 
-    # Latest Values
     latest_bbw_pct = float(bbw_pctile.iloc[-1])
     is_ttm_squeeze = bool(bb_upper.iloc[-1] <= kc_upper.iloc[-1] and bb_lower.iloc[-1] >= kc_lower.iloc[-1])
     atr_ratio = float(atr14.iloc[-1] / atr50.iloc[-1]) if pd.notnull(atr50.iloc[-1]) else 1.0
     latest_adx = float(adx14.iloc[-1]) if pd.notnull(adx14.iloc[-1]) else 25.0
 
-    # Four Methods Evaluation
     c1_bbw = latest_bbw_pct <= 0.10
     c2_ttm = is_ttm_squeeze
     c3_atr = atr_ratio <= 0.70
@@ -64,5 +62,24 @@ def calculate_squeeze_signals(df: pd.DataFrame) -> dict:
         "bbw_pct": round(latest_bbw_pct * 100, 1),
         "atr_ratio": round(atr_ratio, 2),
         "adx": round(latest_adx, 1),
-        "qualified": score >= 3  # High confidence squeeze
+        "qualified": score >= 3
+    }
+
+def get_option_metrics(ticker_str: str) -> dict:
+    tk = yf.Ticker(ticker_str)
+    expirations = tk.options
+    if not expirations:
+        return {"atm_iv": "N/A", "expiry": "None"}
+    
+    target_exp = expirations[min(len(expirations)-1, 1)]
+    chain = tk.option_chain(target_exp)
+    calls = chain.calls
+    
+    current_price = tk.fast_info["lastPrice"]
+    atm_call = calls.iloc[(calls["strike"] - current_price).abs().argsort()[:1]]
+    atm_iv = round(float(atm_call["impliedVolatility"].iloc[0]) * 100, 1) if not atm_call.empty else "N/A"
+    
+    return {
+        "atm_iv": f"{atm_iv}%",
+        "expiry": target_exp
     }

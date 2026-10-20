@@ -67,19 +67,25 @@ def calculate_squeeze_signals(df: pd.DataFrame) -> dict:
 
 def get_option_metrics(ticker_str: str) -> dict:
     tk = yf.Ticker(ticker_str)
-    expirations = tk.options
-    if not expirations:
+    try:
+        expirations = tk.options
+        if not expirations:
+            return {"atm_iv": "N/A", "expiry": "None"}
+        
+        target_exp = expirations[min(len(expirations)-1, 1)]
+        chain = tk.option_chain(target_exp)
+        calls = chain.calls
+        
+        current_price = tk.fast_info.get("lastPrice", None)
+        if current_price is None or calls.empty:
+            return {"atm_iv": "N/A", "expiry": target_exp}
+
+        atm_call = calls.iloc[(calls["strike"] - current_price).abs().argsort()[:1]]
+        atm_iv = round(float(atm_call["impliedVolatility"].iloc[0]) * 100, 1) if not atm_call.empty else "N/A"
+        
+        return {
+            "atm_iv": f"{atm_iv}%",
+            "expiry": target_exp
+        }
+    except Exception:
         return {"atm_iv": "N/A", "expiry": "None"}
-    
-    target_exp = expirations[min(len(expirations)-1, 1)]
-    chain = tk.option_chain(target_exp)
-    calls = chain.calls
-    
-    current_price = tk.fast_info["lastPrice"]
-    atm_call = calls.iloc[(calls["strike"] - current_price).abs().argsort()[:1]]
-    atm_iv = round(float(atm_call["impliedVolatility"].iloc[0]) * 100, 1) if not atm_call.empty else "N/A"
-    
-    return {
-        "atm_iv": f"{atm_iv}%",
-        "expiry": target_exp
-    }

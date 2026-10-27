@@ -7,7 +7,7 @@ from screener import calculate_squeeze_signals, get_option_metrics
 st.set_page_config(page_title="Vol Squeeze Screener", layout="wide")
 st.title("🎯 Volatility Squeeze Scanner")
 
-DEFAULT_TICKERS = "AAPL, MSFT, NVDA, AMZN, TSLA, META, AMD, NFLX, COIN, KRMN, PFE, TSM, GE, PWR, LRCX, DDOG, ETN, FPS, SNPS, STRL, ANET, CRM, HONA< FN, GE, GEV, BA, CECO, SPCX, GLD, GLW, CAT, KTOS, CIEN, AVGO, RKLB, RGTI, QNT, QCOM, DE< CRDO, IBM, MRVL, NOW, IONQ, RVMD,  JNJ, MEDP"
+DEFAULT_TICKERS = "SPY, QQQ, IWM, SMH, XBI, XLF, XLE, GLD, COIN, PLTR, NFLX, CRWD, ARM, SMCI, SHOP, PANW, AAPL, MSFT, NVDA, AMZN, TSLA, META, AMD, NFLX, COIN, KRMN, PFE, TSM, GE, PWR, LRCX, DDOG, ETN, FPS, SNPS, STRL, ANET, CRM, HONA, FN, GE, GEV, BA, CECO, SPCX, GLD, GLW, CAT, KTOS, CIEN, AVGO, RKLB, RGTI, QNT, QCOM, DE, CRDO, IBM, MRVL, NOW, IONQ, RVMD,  JNJ, MEDP"
 user_input = st.text_area("Watchlist (comma separated)", value=DEFAULT_TICKERS)
 tickers = [t.strip().upper() for t in user_input.split(",") if t.strip()]
 
@@ -55,6 +55,23 @@ if st.button("🚀 Run Squeeze Scan", use_container_width=True):
 
         if results:
             res_df = pd.DataFrame(results)
+
+            # --- SORTING ENHANCEMENT ---
+            # Extract raw numeric BBW percentile for clean mathematical sorting
+            res_df["_sort_bbw"] = (
+                res_df["BBW Pctile"]
+                .astype(str)
+                .str.rstrip("%")
+                .replace("N/A", "999")
+                .astype(float)
+            )
+
+            # Sort: highest Score first (e.g. 3/4 before 2/4), then tightest BBW (ascending)
+            res_df = res_df.sort_values(
+                by=["Score", "_sort_bbw"],
+                ascending=[False, True]
+            ).drop(columns=["_sort_bbw"])
+            # ---------------------------
             st.dataframe(res_df, use_container_width=True)
         else:
             st.info("No tickers currently meet the criteria.")
